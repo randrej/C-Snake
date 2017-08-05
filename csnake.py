@@ -50,8 +50,28 @@ class Enum:
         self.values.append(EnumValue(name, value=value, comment=comment))
 
 
+class FuncPtr:
+    """Function pointer description."""
+
+    def __init__(self, return_type, args=None, comment=None):
+        self.return_type = return_type
+        self.args = args
+
+    def get_declaration(self, name):
+        """Generate the whole declaration."""
+
+        jointargs = self.args
+        if isinstance(self.args, (list, tuple)):
+            jointargs = ', '.join(jointargs)
+
+        retval = '{rt} (*{name})({args})'.format(rt=self.return_type,
+                                                 name=name,
+                                                 args=jointargs if self.args else '')
+        return retval
+
+
 class Variable:
-    """c-style variable"""
+    """c-style variable."""
 
     def __init__(self,
                  name,
@@ -92,6 +112,14 @@ class Variable:
             qual = ""
 
         array = self.__array_dimensions()
+        if isinstance(self.primitive, FuncPtr):
+            decl = self.primitive.get_declaration(self.name)
+            return '{ext}{qual}{decl}{array}'.format(
+                ext='extern ' if extern else '',
+                qual=qual,
+                decl=decl,
+                array=array)
+
         return '{ext}{qual}{prim} {name}{array}'.format(
             ext='extern ' if extern else '',
             qual=qual,
@@ -201,6 +229,14 @@ class Variable:
             assignment += generate_array(self.value, indent, self.value_opts)
         else:
             assignment = generate_single_var(self.value, self.value_opts)
+
+        if isinstance(self.primitive, FuncPtr):
+            decl = self.primitive.get_declaration(self.name)
+            return '{qual}{decl}{array} = {assignment};'.format(
+                qual=qual,
+                decl=decl,
+                array=array,
+                assignment=assignment)
 
         return '{qual}{prim} {name}{array} = {assignment};'.format(
             qual=qual,
