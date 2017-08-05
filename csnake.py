@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import date
+from abc import ABCMeta, abstractmethod
 
 # public helper functions
 
@@ -104,6 +105,8 @@ class Variable:
             """generate single variable"""
             if isinstance(var_, str):
                 return "\"{val}\"".format(val=var_)
+            elif isinstance(var_, Modifier):
+                return var_.name
             elif isinstance(var_, (int, float)):
                 if formatstring is None:
                     return str(var_)
@@ -172,7 +175,7 @@ class Variable:
                         output += '\n' + (indent * depth)
                     leading_comma = False
                     continue
-                if isinstance(top, (int, float, str)):
+                if isinstance(top, (int, float, str, Modifier)):
                     output += generate_single_var(top, formatstring)
                     continue
                 if isinstance(top, Designator):
@@ -231,6 +234,167 @@ class Struct:
         return '{name} {ref};'.format(name=self.name, ref=self.ref_name)
 
 
+class Modifier(metaclass=ABCMeta):
+    """Abstract base class for initialization modifiers.
+
+Sometimes we want to initialize a value to another variable, but in some more
+complicated manner: using the address-of operator, dereference operator,
+subscripting, typecasting... This is an ABC for those modifiers."""
+
+    @property
+    @abstractmethod
+    def name(self):
+        """Return a name for initialization."""
+        pass
+
+# no modifier is also a modifier!
+Modifier.register(Variable)
+
+
+class AddressOf(Modifier):
+    """Address of (&) modifier for variable initialization"""
+    def __init__(self, target):
+        if not isinstance(target, Modifier, Function):
+            raise TypeError("Modifiers can only be used with variables, "
+                            "functions and modifiers.")
+        self.target = target
+
+    @property
+    def name(self):
+        return '&' + self.target.name
+
+class Dereference(Modifier):
+    """Dereference (*) modifier for variable initialization"""
+    def __init__(self, target):
+        if not isinstance(target, Modifier):
+            raise TypeError("Modifiers can only be used with variables and modifiers.")
+        self.target = target
+
+    @property
+    def name(self):
+        return '*' + self.target.name
+
+class Typecast(Modifier):
+    """Typecast modifier for variable initialization"""
+    def __init__(self, target, cast):
+        if not isinstance(target, Modifier):
+            raise TypeError("Modifiers can only be used with variables and modifiers.")
+        self.target = target
+        self.cast = cast
+
+    @property
+    def name(self):
+        return '('+ self.cast + ')' + self.target.name
+
+class Subscript(Modifier):
+    """Subscript ([]) modifier for variable initialization"""
+    def __init__(self, target, subscript):
+        if not isinstance(target, Modifier):
+            raise TypeError("Modifiers can only be used with variables and modifiers.")
+        if not isinstance(subscript, (int, Modifier, list, tuple)):
+            raise TypeError("Subscript must be an int, Modifier (or Variable), list or tuple.")
+        if not subscript:
+            raise TypeError("Subscript must be non-empty.")
+
+        if isinstance(subscript, (int, Modifier)):
+            self.subscript = [subscript]
+        else:
+            self.subscript = subscript
+        self.target = target
+
+    @property
+    def name(self):
+        ret_str=''
+        for dim in self.subscript:
+            if isinstance(dim, (int, str)):
+                ret_str += '[' + str(dim) + ']'
+            elif isinstance(dim, Modifier):
+                ret_str += '[' + dim.name + ']'
+        return self.target.name + ret_str
+
+class Dot(Modifier):
+    """Dot (.) modifier for variable initialization"""
+    def __init__(self, target, item):
+        if not isinstance(target, Modifier):
+            raise TypeError("Modifiers can only be used with variables and modifiers.")
+        self.target = target
+        self.item = item
+
+    @property
+    def name(self):
+        if isinstance(self.item, str):
+            return self.target.name + '.' + self.item
+        elif isinstance(self.item, Modifier):
+            return self.target.name + '.' + self.item.name
+
+class Arrow(Modifier):
+    """Arrow (->) modifier for variable initialization"""
+    def __init__(self, target, item):
+        if not isinstance(target, Modifier):
+            raise TypeError("Modifiers can only be used with variables and modifiers.")
+        self.target = target
+        self.item = item
+
+    @property
+    def name(self):
+        if isinstance(self.item, str):
+            return self.target.name + '->' + self.item
+        elif isinstance(self.item, Modifier):
+            return self.target.name + '->' + self.item.name
+
+class GenericModifier(Modifier):
+    """Generic modifier that expects a formatstring that uses {0} to signify
+    variable name."""
+    def __init__(self, target, formatstring):
+        if target and not isinstance(target, Modifier):
+            raise TypeError("Modifiers can only be used with variables and modifiers.")
+        self.target = target
+        self.formatstring = formatstring
+
+    @property
+    def name(self):
+        if self.target:
+                return self.formatstring.format(self.target.name)
+        return self.formatstring
+
+class OffsetOf(Modifier):
+    """offsetof (->) modifier for initializing variables to offsets of struct
+    members"""
+    def __init__(self, struct, member):
+        if not isinstance(struct, (str, Struct)):
+            raise TypeError('Modifiers can only be used with struct names and structs')
+        self.struct = struct
+        self.member = member
+
+    @property
+    def name(self):
+        if isinstance(self.struct, str):
+            struct_name = self.struct
+        elif isinstance(self.struct, Struct):
+            if self.struct.typedef:
+                struct_name = self.struct.name
+            else:
+                struct_name = 'struct ' + self.struct.name
+        if isinstance(self.member, str):
+            member_name = self.member
+        elif isinstance(self.member, Modifier):
+            member_name = self.member.name
+
+        return 'offsetof({struct}, {memb})'.format(struct=struct_name,
+                                                   memb=member_name)
+
+
+class TextModifier(Modifier):
+    """Generic modifier that just contains arbitrary text to be used to
+    initialize a value"""
+    def __init__(self, text):
+        self.text = text
+
+    @property
+    def name(self):
+        return str(self.text)
+
+    
 class Function:
     """c-style function"""
 
@@ -271,6 +435,7 @@ class Function:
 
 
 # Main, file-generating class
+
 
 class CodeWriter:
     """Class to describe and generate contents of a .c/.cpp/.h/.hpp file"""
