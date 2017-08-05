@@ -225,14 +225,6 @@ class Struct:
             raise TypeError("variable must be 'Variable'")
         self.variables.append(variable)
 
-    def declaration(self):
-        """Return a declaration string."""
-        if self.ref_name is None:
-            raise ValueError('no ref_name supplied for Struct "{name}"'.format(
-                name=self.name))
-
-        return '{name} {ref};'.format(name=self.name, ref=self.ref_name)
-
 
 class Modifier(metaclass=ABCMeta):
     """Abstract base class for initialization modifiers.
@@ -708,11 +700,6 @@ class CodeWriter:
         for var in struct.variables:
             if isinstance(var, Variable):  # variables within the struct
                 self.add_variable_declaration(var)
-            elif isinstance(var, Struct):  # other structs within the struct
-                if var.ref_name is None:
-                    raise ValueError('no ref_name provided for struct {name}'.
-                                     format(name=var.name))
-                self.add_line(var.declaration(), comment=var.comment)
 
         self.close_brace(new_line=False)
         if struct.typedef:
