@@ -35,8 +35,9 @@ class EnumValue:
 class Enum:
     """c-style enumeration class"""
 
-    def __init__(self, name, prefix=""):
+    def __init__(self, name, prefix="", typedef=False):
 
+        self.typedef = typedef
         # enum values
         self.values = []
         self.name = name
@@ -212,17 +213,16 @@ class Variable:
 class Struct:
     """c-style struct class"""
 
-    def __init__(self, name, ref_name=None, comment=None):
+    def __init__(self, name, typedef=False, comment=None):
         self.name = name  # definition name of this struct e.g. Struct_t
-        self.ref_name = ref_name  # reference name of this struct e.g. the_struct
         self.variables = []
         self.comment = comment
+        self.typedef = typedef
 
     def add_variable(self, variable):
         """Add another variable to struct"""
-        if not isinstance(variable, (Variable, Struct)):
-            raise TypeError("variable must be 'Variable' or 'Struct'")
-
+        if not isinstance(variable, Variable):
+            raise TypeError("variable must be 'Variable'")
         self.variables.append(variable)
 
     def declaration(self):
@@ -651,7 +651,10 @@ class CodeWriter:
         if not isinstance(enum, Enum):
             raise TypeError('enum must be of type "Enum"')
 
-        self.add_line("typedef enum")
+        if enum.typedef:
+            self.add_line("typedef enum")
+        else:
+            self.add_line("enum {name}".format(name=enum.name))
         self.open_brace()
 
         for i, v in enumerate(enum.values):
@@ -665,7 +668,10 @@ class CodeWriter:
             self.add_line(line, comment=v.comment)
 
         self.close_brace(new_line=False)
-        self.add(' ' + enum.name + ';')
+        if enum.typedef:
+            self.add(' ' + enum.name + ';')
+        else:
+            self.add(';')
         self.add_line()
 
     def add_variable_declaration(self, var, extern=False):
@@ -693,7 +699,10 @@ class CodeWriter:
         if not isinstance(struct, Struct):
             raise TypeError("struct must be of type 'Struct'")
 
-        self.add_line("typedef struct")
+        if struct.typedef:
+            self.add_line("typedef struct")
+        else:
+            self.add_line("struct {name}".format(name=struct.name))
         self.open_brace()
 
         for var in struct.variables:
@@ -706,7 +715,10 @@ class CodeWriter:
                 self.add_line(var.declaration(), comment=var.comment)
 
         self.close_brace(new_line=False)
-        self.add(' ' + struct.name + ';')
+        if struct.typedef:
+            self.add(' ' + struct.name + ';')
+        else:
+            self.add(';')
         self.add_line()
 
     def add_function_prototype(self, func, comment=None):
