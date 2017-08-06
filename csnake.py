@@ -440,14 +440,28 @@ class Function:
         self.variables.append(var)
 
     def prototype(self):
-        """function prototype string"""
-        prot = '{ret} {nm}({funcs})'.format(
+        """Generate function prototype string."""
+        prot = '{ret} {nm}({args})'.format(
             ret=self.return_type,
             nm=self.name,
-            funcs=', '.join([v.declaration() for v in self.variables])
+            args=', '.join([v.declaration() for v in self.variables])
             if self.variables else 'void')
 
         return prot
+
+    def add_code(self, code):
+        """Add some code to the body of the function."""
+
+        if isinstance(code, list):
+            code = ', '.join(str(code))
+
+        if isinstance(code, CodeWriter):
+            code = code.code
+
+        if not isinstance(code, (str, list, CodeWriter)):
+            raise TypeError("text must be a 'str', 'list' or a 'CodeWriter'.")
+
+        self.code += code + '\n'
 
     def call(self, *arg):
         """call a function"""
@@ -757,6 +771,14 @@ class CodeWriter:
             raise TypeError("func must be of type 'Function'")
 
         self.add_line(func.prototype(), comment=comment)
+        self.open_brace()
+
+        for line in func.code.splitlines():
+            if line == '':
+                self.add_line()
+            else:
+                self.add_line(line)
+        self.close_brace()
 
     def call_function(self, func, *arg):
         """enter a function"""
