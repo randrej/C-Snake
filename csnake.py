@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
-from datetime import date
 from abc import ABCMeta, abstractmethod
+from datetime import date
 
 # public helper functions
 
+
 def shape(array):
-    """Return dimensions (shape) of a multidimensional list"""
+    """Return dimensions (shape) of a multidimensional list."""
     # strings should return nothing
+
     if isinstance(array, str):
         return ''
     curr = array
     shp = []
+
     while True:
         if isinstance(curr, dict):
             return shp
@@ -24,7 +27,7 @@ def shape(array):
 # classes defining C constructs
 
 class EnumValue:
-    """Singular value of an C-style enumeration"""
+    """Singular value of an C-style enumeration."""
 
     def __init__(self, name, value=None, comment=None):
         self.name = name
@@ -33,7 +36,7 @@ class EnumValue:
 
 
 class Enum:
-    """c-style enumeration class"""
+    """C-style enumeration class."""
 
     def __init__(self, name, prefix="", typedef=False):
 
@@ -45,8 +48,7 @@ class Enum:
         self.prefix = prefix
 
     def add_value(self, name, value=None, comment=None):
-        """assures that the user adds the values in the correct order"""
-
+        """Assures that the user adds the values in the correct order."""
         self.values.append(EnumValue(name, value=value, comment=comment))
 
 
@@ -59,19 +61,20 @@ class FuncPtr:
 
     def get_declaration(self, name):
         """Generate the whole declaration."""
-
         jointargs = self.args
+
         if isinstance(self.args, (list, tuple)):
             jointargs = ', '.join(jointargs)
 
         retval = '{rt} (*{name})({args})'.format(rt=self.return_type,
                                                  name=name,
                                                  args=jointargs if self.args else '')
+
         return retval
 
 
 class Variable:
-    """c-style variable."""
+    """C-style variable."""
 
     def __init__(self,
                  name,
@@ -100,10 +103,12 @@ class Variable:
             array = "".join("[{0}]".format(dim) for dim in shape(self.value))
         else:
             array = ""
+
         return array
 
     def declaration(self, extern=False):
         """Return a declaration string."""
+
         if isinstance(self.qualifiers, (list, tuple)):
             qual = " ".join(self.qualifiers) + " "
         elif self.qualifiers is not None:
@@ -112,8 +117,10 @@ class Variable:
             qual = ""
 
         array = self.__array_dimensions()
+
         if isinstance(self.primitive, FuncPtr):
             decl = self.primitive.get_declaration(self.name)
+
             return '{ext}{qual}{decl}{array}'.format(
                 ext='extern ' if extern else '',
                 qual=qual,
@@ -129,9 +136,9 @@ class Variable:
 
     def initialization(self, indent='    '):
         """Return an initialization string."""
-
         def generate_single_var(var_, formatstring=None):
-            """generate single variable"""
+            """Generate single variable."""
+
             if isinstance(var_, str):
                 return "\"{val}\"".format(val=var_)
             elif isinstance(var_, Modifier):
@@ -139,21 +146,24 @@ class Variable:
             elif isinstance(var_, (int, float)):
                 if formatstring is None:
                     return str(var_)
+
                 return formatstring.format(var_)
 
         def generate_array(array, indent='    ', formatstring=None):
-            """print (multi)dimensional arrays"""
-
+            """Print (multi)dimensional arrays."""
             class OpenBrace:
                 """Helper class to identify open braces while printing."""
+
                 pass
 
             class ClosedBrace:
-                """Helper class to identify closed braces while printing"""
+                """Helper class to identify closed braces while printing."""
+
                 pass
 
             class Designator:
-                """Helper class to identify struct designators"""
+                """Helper class to identify struct designators."""
+
                 def __init__(self, name):
                     self.name = name
 
@@ -166,22 +176,30 @@ class Variable:
             while stack:
                 top = stack.pop()
                 # non-printed tokens
+
                 if isinstance(top, (list, tuple)):
                     stack.append(ClosedBrace())
                     stack.extend(top[::-1])
                     stack.append(OpenBrace())
+
                     continue
+
                 if isinstance(top, dict):
                     stack.append(ClosedBrace())
-                    dict_pairs = [[value, Designator(key)] for key, value in top.items()][::-1]
-                    flatdict = [item for sublist in dict_pairs for item in sublist]
+                    dict_pairs = [[value, Designator(key)]
+                                  for key, value in top.items()][::-1]
+                    flatdict = [
+                        item for sublist in dict_pairs for item in sublist]
                     stack.extend(flatdict)
                     stack.append(OpenBrace())
+
                     continue
                 # non-comma-delimited tokens
+
                 if isinstance(top, ClosedBrace):
                     depth -= 1 if depth > 0 else 0
                     output += '}'
+
                     if stack:
                         if isinstance(stack[-1], ClosedBrace):
                             output += '\n' + (indent * (depth - 1))
@@ -190,31 +208,42 @@ class Variable:
                         else:
                             output += ',\n' + (indent * depth)
                         leading_comma = False
+
                     continue
                 # check the need for leading comma
+
                 if leading_comma:
                     output += ', '
                 else:
                     leading_comma = True
                 # (potentially) comma delimited tokens
+
                 if isinstance(top, OpenBrace):
                     output += '{'
                     depth += 1
+
                     if isinstance(stack[-1], (OpenBrace, list, tuple, dict)):
                         output += '\n' + (indent * depth)
                     leading_comma = False
+
                     continue
+
                 if isinstance(top, (int, float, str, Modifier)):
                     output += generate_single_var(top, formatstring)
+
                     continue
+
                 if isinstance(top, Designator):
                     output += '\n' + (indent * depth)
                     output += '.' + top.name + ' = '
                     leading_comma = False
+
                     continue
+
             return output
 
         # main part: generating initializer
+
         if isinstance(self.qualifiers, (list, tuple)):
             qual = " ".join(self.qualifiers) + " "
         elif self.qualifiers is not None:
@@ -232,6 +261,7 @@ class Variable:
 
         if isinstance(self.primitive, FuncPtr):
             decl = self.primitive.get_declaration(self.name)
+
             return '{qual}{decl}{array} = {assignment};'.format(
                 qual=qual,
                 decl=decl,
@@ -247,7 +277,7 @@ class Variable:
 
 
 class Struct:
-    """c-style struct class"""
+    """C-style struct class."""
 
     def __init__(self, name, typedef=False, comment=None):
         self.name = name  # definition name of this struct e.g. Struct_t
@@ -256,7 +286,8 @@ class Struct:
         self.typedef = typedef
 
     def add_variable(self, variable):
-        """Add another variable to struct"""
+        """Add another variable to struct."""
+
         if not isinstance(variable, Variable):
             raise TypeError("variable must be 'Variable'")
         self.variables.append(variable)
@@ -265,9 +296,11 @@ class Struct:
 class Modifier(metaclass=ABCMeta):
     """Abstract base class for initialization modifiers.
 
-Sometimes we want to initialize a value to another variable, but in some more
-complicated manner: using the address-of operator, dereference operator,
-subscripting, typecasting... This is an ABC for those modifiers."""
+    Sometimes we want to initialize a value to another variable, but in some
+    more complicated manner: using the address-of operator, dereference
+    operator, subscripting, typecasting... This is an ABC for those
+    modifiers.
+    """
 
     @property
     @abstractmethod
@@ -275,12 +308,14 @@ subscripting, typecasting... This is an ABC for those modifiers."""
         """Return a name for initialization."""
         pass
 
+
 # no modifier is also a modifier!
 Modifier.register(Variable)
 
 
 class AddressOf(Modifier):
-    """Address of (&) modifier for variable initialization"""
+    """Address of (&) modifier for variable initialization."""
+
     def __init__(self, target):
         if not isinstance(target, Modifier, Function):
             raise TypeError("Modifiers can only be used with variables, "
@@ -291,36 +326,49 @@ class AddressOf(Modifier):
     def name(self):
         return '&' + self.target.name
 
+
 class Dereference(Modifier):
-    """Dereference (*) modifier for variable initialization"""
+    """Dereference (*) modifier for variable initialization."""
+
     def __init__(self, target):
         if not isinstance(target, Modifier):
-            raise TypeError("Modifiers can only be used with variables and modifiers.")
+            raise TypeError(
+                "Modifiers can only be used with variables and modifiers.")
         self.target = target
 
     @property
     def name(self):
         return '*' + self.target.name
 
+
 class Typecast(Modifier):
-    """Typecast modifier for variable initialization"""
+    """Typecast modifier for variable initialization."""
+
     def __init__(self, target, cast):
         if not isinstance(target, Modifier):
-            raise TypeError("Modifiers can only be used with variables and modifiers.")
+            raise TypeError(
+                "Modifiers can only be used with variables and modifiers.")
         self.target = target
         self.cast = cast
 
     @property
     def name(self):
-        return '('+ self.cast + ')' + self.target.name
+        return '(' + self.cast + ')' + self.target.name
+
 
 class Subscript(Modifier):
-    """Subscript ([]) modifier for variable initialization"""
+    """Subscript ([]) modifier for variable initialization."""
+
     def __init__(self, target, subscript):
         if not isinstance(target, Modifier):
-            raise TypeError("Modifiers can only be used with variables and modifiers.")
+            raise TypeError(
+                "Modifiers can only be used with variables and modifiers.")
+
         if not isinstance(subscript, (int, Modifier, list, tuple)):
-            raise TypeError("Subscript must be an int, Modifier (or Variable), list or tuple.")
+            raise TypeError(
+                "Subscript must be an int, Modifier (or Variable), list or"
+                " tuple.")
+
         if not subscript:
             raise TypeError("Subscript must be non-empty.")
 
@@ -332,19 +380,24 @@ class Subscript(Modifier):
 
     @property
     def name(self):
-        ret_str=''
+        ret_str = ''
+
         for dim in self.subscript:
             if isinstance(dim, (int, str)):
                 ret_str += '[' + str(dim) + ']'
             elif isinstance(dim, Modifier):
                 ret_str += '[' + dim.name + ']'
+
         return self.target.name + ret_str
 
+
 class Dot(Modifier):
-    """Dot (.) modifier for variable initialization"""
+    """Dot (.) modifier for variable initialization."""
+
     def __init__(self, target, item):
         if not isinstance(target, Modifier):
-            raise TypeError("Modifiers can only be used with variables and modifiers.")
+            raise TypeError(
+                "Modifiers can only be used with variables and modifiers.")
         self.target = target
         self.item = item
 
@@ -355,11 +408,14 @@ class Dot(Modifier):
         elif isinstance(self.item, Modifier):
             return self.target.name + '.' + self.item.name
 
+
 class Arrow(Modifier):
-    """Arrow (->) modifier for variable initialization"""
+    """Arrow (->) modifier for variable initialization."""
+
     def __init__(self, target, item):
         if not isinstance(target, Modifier):
-            raise TypeError("Modifiers can only be used with variables and modifiers.")
+            raise TypeError(
+                "Modifiers can only be used with variables and modifiers.")
         self.target = target
         self.item = item
 
@@ -370,27 +426,37 @@ class Arrow(Modifier):
         elif isinstance(self.item, Modifier):
             return self.target.name + '->' + self.item.name
 
+
 class GenericModifier(Modifier):
-    """Generic modifier that expects a formatstring that uses {0} to signify
-    variable name."""
+    """Generic modifier
+
+    Expects a formatstring that uses {0} to signify variable name.
+    """
+
     def __init__(self, target, formatstring):
         if target and not isinstance(target, Modifier):
-            raise TypeError("Modifiers can only be used with variables and modifiers.")
+            raise TypeError(
+                "Modifiers can only be used with variables and modifiers.")
         self.target = target
         self.formatstring = formatstring
 
     @property
     def name(self):
         if self.target:
-                return self.formatstring.format(self.target.name)
+            return self.formatstring.format(self.target.name)
+
         return self.formatstring
 
+
 class OffsetOf(Modifier):
-    """offsetof (->) modifier for initializing variables to offsets of struct
-    members"""
+    """Offsetof (->) modifier for initializing variables to offsets of struct
+    members.
+    """
+
     def __init__(self, struct, member):
         if not isinstance(struct, (str, Struct)):
-            raise TypeError('Modifiers can only be used with struct names and structs')
+            raise TypeError(
+                'Modifiers can only be used with struct names and structs')
         self.struct = struct
         self.member = member
 
@@ -403,6 +469,7 @@ class OffsetOf(Modifier):
                 struct_name = self.struct.name
             else:
                 struct_name = 'struct ' + self.struct.name
+
         if isinstance(self.member, str):
             member_name = self.member
         elif isinstance(self.member, Modifier):
@@ -414,7 +481,8 @@ class OffsetOf(Modifier):
 
 class TextModifier(Modifier):
     """Generic modifier that just contains arbitrary text to be used to
-    initialize a value"""
+    initialize a value."""
+
     def __init__(self, text):
         self.text = text
 
@@ -422,18 +490,19 @@ class TextModifier(Modifier):
     def name(self):
         return str(self.text)
 
-    
+
 class Function:
-    """c-style function"""
+    """C-style function."""
 
     def __init__(self, name, return_type='void'):
         self.name = name
         self.return_type = return_type
-
         self.variables = []
+        self.code = ''
 
     def add_argument(self, var):
-        """Add an argument to function"""
+        """Add an argument to function."""
+
         if not isinstance(var, Variable):
             raise TypeError("variable must be of type 'Variable'")
 
@@ -445,6 +514,7 @@ class Function:
             ret=self.return_type,
             nm=self.name,
             args=', '.join([v.declaration() for v in self.variables])
+
             if self.variables else 'void')
 
         return prot
@@ -464,7 +534,8 @@ class Function:
         self.code += code + '\n'
 
     def call(self, *arg):
-        """call a function"""
+        """Call a function."""
+
         if not len(arg) == len(self.variables):
             print(arg)
             raise ValueError(
@@ -480,7 +551,7 @@ class Function:
 
 
 class CodeWriter:
-    """Class to describe and generate contents of a .c/.cpp/.h/.hpp file"""
+    """Class to describe and generate contents of a .c/.cpp/.h/.hpp file."""
 
     CPP = "__cplusplus"
 
@@ -489,6 +560,7 @@ class CodeWriter:
     def __init__(self, lf="\n", indent=4):
 
         self.line_feed = lf
+
         if isinstance(indent, int):
             self.indent = ' ' * indent
         else:
@@ -502,11 +574,12 @@ class CodeWriter:
         self.text = ''  # code
 
     def tab_in(self):
-        """increase tab level"""
+        """Increase tab level."""
         self.tabs += 1
 
     def tab_out(self):
-        """decrease tab level"""
+        """Decrease tab level."""
+
         if self.tabs > 0:
             self.tabs -= 1
 
@@ -514,24 +587,26 @@ class CodeWriter:
         self.tabs = 0
 
     def start_comment(self):
-        """start a bulk comment"""
+        """Start a bulk comment."""
         self.add_line('/*')
         self.commenting = True
 
     def end_comment(self):
-        """end a bulk comment"""
+        """End a bulk comment."""
         self.commenting = False
         self.add_line('*/')
 
     def add_autogen_comment(self, source=None):
-        """add the auto-gen comment (user can point to the source file if required)"""
+        """Add the auto-gen comment (user can point to the source file if required)."""
         self.start_comment()
         self.add_line(
             "This file was autogenerated using the C-Snake v{version} script".
+
             format(version=self.VERSION))
         self.add_line(
             "This file should not be edited directly, any changes will be overwritten next time the script is run"
         )
+
         if source:
             self.add_line(
                 "Make any changes to the file '{src}'".format(src=str(source)))
@@ -552,6 +627,7 @@ class CodeWriter:
                     self.add_line(line)
 
         year = date.today().year
+
         if authors:
             for author in authors:
                 self.add_line("Copyright © {year} {name}{email}".format(
@@ -563,34 +639,38 @@ class CodeWriter:
 
         if not isinstance(license_, str):
             raise TypeError('license_ must be a string.')
+
         for line in license_.splitlines():
             self.add_line(line)
 
         self.end_comment()
 
     def open_brace(self):
-        """open-brace and tab"""
+        """Open-brace and tab."""
         self.add_line('{')
         self.tab_in()
 
     def close_brace(self, new_line=True):
-        """close-brace and tab-out"""
+        """Close-brace and tab-out."""
         self.tab_out()
         self.add(self.indent * self.tabs + '}')
+
         if new_line:
             self.add_line('')
 
     def define(self, name, value=None, comment=None):
-        """add a define"""
+        """Add a define."""
         line = "#define " + name
+
         if value:
             line += ' ' + str(value)
 
         self.add_line(line, comment=comment, ignore_tabs=True)
 
     def start_if_def(self, define, invert=False, comment=None):
-        """start an #ifdef block (preprocessor)"""
+        """Start an #ifdef block (preprocessor)."""
         self.defs.append(define)
+
         if invert:
             self.add_line(
                 "#ifndef " + define, comment=comment, ignore_tabs=True)
@@ -599,7 +679,7 @@ class CodeWriter:
                 "#ifdef " + define, comment=comment, ignore_tabs=True)
 
     def end_if_def(self):
-        """end an #ifdef block"""
+        """End an #ifdef block."""
 
         if self.defs:
             self.add_line("#endif ", comment=self.defs.pop(), ignore_tabs=True)
@@ -607,7 +687,7 @@ class CodeWriter:
             self.add_line("#endif", ignore_tabs=True)
 
     def cpp_entry(self):
-        """add an 'extern' switch for CPP compilers"""
+        """Add an 'extern' switch for CPP compilers."""
         self.start_if_def(self.CPP, "Play nice with C++ compilers")
         self.add_line('extern "C" {', ignore_tabs=True)
         self.end_if_def()
@@ -618,50 +698,53 @@ class CodeWriter:
         self.end_if_def()
 
     def start_switch(self, switch):
-        """start a switch statement"""
+        """Start a switch statement."""
         self.switch.append(switch)
         self.add_line('switch ({sw})'.format(sw=switch))
         self.open_brace()
 
     def end_switch(self):
-        """end a switch statement"""
+        """End a switch statement."""
         self.tab_out()
         self.add('}')
+
         if self.switch:
             self.add(' // ~switch ({sw})'.format(sw=self.switch.pop()))
         self.add_line()
 
     def add_case(self, case, comment=None):
-        """add a case statement"""
+        """Add a case statement."""
         self.add_line('case {case}:'.format(case=case), comment=comment)
         self.tab_in()
 
     def add_default(self, comment=None):
-        """add a default case statement"""
+        """Add a default case statement."""
         self.add_line('default:', comment=comment)
         self.tab_in()
 
     def break_from_case(self):
-        """break from a case"""
+        """Break from a case."""
         self.add_line('break;')
         self.tab_out()
 
     def return_from_case(self, value=None):
-        """return from a case"""
+        """Return from a case."""
         self.add_line(
             'return{val};'.format(val=' ' + str(value) if value else ''))
         self.tab_out()
 
     def add(self, text):
-        """add raw text"""
+        """Add raw text."""
         self.text += text
 
     def add_line(self, text=None, comment=None, ignore_tabs=False):
-        """add a line of (formatted) text"""
+        """Add a line of (formatted) text."""
 
         # empty line
+
         if not text and not comment and not self.commenting:
             self.add(self.line_feed)
+
             return
 
         if not ignore_tabs and not self.commenting:
@@ -671,9 +754,11 @@ class CodeWriter:
             self.add("* ")
 
         # add the text (if appropriate)
+
         if text:
             self.add(text)
         # add a trailing comment (if appropriate)
+
         if comment:
             if text:
                 self.add(' ')  # add a space after the text
@@ -682,14 +767,15 @@ class CodeWriter:
         self.add(self.line_feed)
 
     def include(self, file, comment=None):
-        """add a c-style include"""
+        """Add a c-style include."""
         self.add_line(
             "#include {file}".format(file=file),
             comment=comment,
             ignore_tabs=True)
 
     def add_enum(self, enum):
-        """add a constructed enumeration"""
+        """Add a constructed enumeration."""
+
         if not isinstance(enum, Enum):
             raise TypeError('enum must be of type "Enum"')
 
@@ -701,6 +787,7 @@ class CodeWriter:
 
         for i, v in enumerate(enum.values):
             line = enum.prefix + v.name
+
             if v.value:
                 line += " = " + str(v.value)
 
@@ -710,6 +797,7 @@ class CodeWriter:
             self.add_line(line, comment=v.comment)
 
         self.close_brace(new_line=False)
+
         if enum.typedef:
             self.add(' ' + enum.name + ';')
         else:
@@ -717,27 +805,32 @@ class CodeWriter:
         self.add_line()
 
     def add_variable_declaration(self, var, extern=False):
-        """add a variable declaration"""
+        """Add a variable declaration."""
+
         if not isinstance(var, Variable):
             raise TypeError("variable must be of type 'Variable'")
 
         self.add_line(var.declaration(extern) + ";", comment=var.comment)
 
     def add_variable_initialization(self, var):
-        """add a variable initialization"""
+        """Add a variable initialization."""
+
         if not isinstance(var, Variable):
             raise TypeError("variable must be of type 'Variable'")
 
         initlines = var.initialization(self.indent).splitlines()
         self.add_line(initlines[0], comment=var.comment)
+
         if len(initlines) > 1:
             self.tab_in()
+
             for line in initlines[1:]:
                 self.add_line(line)
             self.tab_out()
 
     def add_struct(self, struct):
-        """add a struct"""
+        """Add a struct."""
+
         if not isinstance(struct, Struct):
             raise TypeError("struct must be of type 'Struct'")
 
@@ -752,6 +845,7 @@ class CodeWriter:
                 self.add_variable_declaration(var)
 
         self.close_brace(new_line=False)
+
         if struct.typedef:
             self.add(' ' + struct.name + ';')
         else:
@@ -759,16 +853,18 @@ class CodeWriter:
         self.add_line()
 
     def add_function_prototype(self, func, comment=None):
-        """add a function prototype"""
+        """Add a function prototype."""
+
         if not isinstance(func, Function):
             raise TypeError("func must be of type 'Function'")
 
         self.add_line(func.prototype() + ';', comment=comment)
 
     def add_function_definition(self, func, comment=None):
-        """add a function definition"""
+        """Add a function definition."""
+
         if not isinstance(func, Function):
-            raise TypeError("func must be of type 'Function'")
+            raise TypeError("Argument func must be of type 'Function'")
 
         self.add_line(func.prototype(), comment=comment)
         self.open_brace()
@@ -781,13 +877,14 @@ class CodeWriter:
         self.close_brace()
 
     def call_function(self, func, *arg):
-        """enter a function"""
+        """Enter a function."""
+
         if not isinstance(func, Function):
             raise TypeError("func must be of type 'Function'")
 
         self.add_line(func.call(*arg))
 
     def write_to_file(self, file):
-        """write code to file"""
+        """Write code to file."""
         with open(file, 'w') as the_file:
             the_file.write(self.text)
