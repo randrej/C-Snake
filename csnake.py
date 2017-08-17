@@ -143,9 +143,9 @@ class Variable:
                 return "\"{val}\"".format(val=var_)
             elif isinstance(var_, Modifier):
                 return var_.name
-            elif isinstance(var_, (int, float)):
+            elif isinstance(var_, (int, float, bool)):
                 if formatstring is None:
-                    return str(var_)
+                    return str(var_).lower()
 
                 return formatstring.format(var_)
 
@@ -228,7 +228,7 @@ class Variable:
 
                     continue
 
-                if isinstance(top, (int, float, str, Modifier)):
+                if isinstance(top, (int, float, str, bool, Modifier)):
                     output += generate_single_var(top, formatstring)
 
                     continue
