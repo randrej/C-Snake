@@ -523,7 +523,7 @@ class Function:
         """Add some code to the body of the function."""
 
         if isinstance(code, list):
-            code = ', '.join(str(code))
+            code = '\n'.join(code)
 
         if isinstance(code, CodeWriter):
             code = code.code
