@@ -317,7 +317,7 @@ class AddressOf(Modifier):
     """Address of (&) modifier for variable initialization."""
 
     def __init__(self, target):
-        if not isinstance(target, Modifier, Function):
+        if not isinstance(target, (Modifier, Function)):
             raise TypeError("Modifiers can only be used with variables, "
                             "functions and modifiers.")
         self.target = target
