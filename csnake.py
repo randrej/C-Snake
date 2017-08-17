@@ -15,7 +15,7 @@ def shape(array):
     shp = []
 
     while True:
-        if isinstance(curr, dict):
+        if not isinstance(curr, (list, tuple)):
             return shp
         try:
             shp.append(len(curr))
