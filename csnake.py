@@ -852,13 +852,15 @@ class CodeWriter:
             self.add(';')
         self.add_line()
 
-    def add_function_prototype(self, func, comment=None):
+    def add_function_prototype(self, func, extern=False, comment=None):
         """Add a function prototype."""
 
         if not isinstance(func, Function):
             raise TypeError("func must be of type 'Function'")
 
-        self.add_line(func.prototype() + ';', comment=comment)
+        self.add_line(
+            ('extern' if extern else '') + func.prototype() + ';',
+            comment=comment)
 
     def add_function_definition(self, func, comment=None):
         """Add a function definition."""
