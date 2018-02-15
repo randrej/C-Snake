@@ -498,11 +498,15 @@ class TextModifier(Modifier):
 class Function:
     """C-style function."""
 
-    def __init__(self, name, return_type='void'):
+    def __init__(self, name, return_type='void', qualifiers=[]):
         self.name = name
         self.return_type = return_type
         self.variables = []
         self.code = ''
+        if isinstance(qualifiers, str):
+            self.qualifiers = [qualifiers]
+        else:
+            self.qualifiers = qualifiers
 
     def add_argument(self, var):
         """Add an argument to function."""
