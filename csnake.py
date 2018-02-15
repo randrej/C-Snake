@@ -145,14 +145,17 @@ class Variable:
                 return "\"{val}\"".format(val=var_)
             elif isinstance(var_, Modifier):
                 return var_.name
-            elif isinstance(var_, (int, float, bool)):
+            elif isinstance(var_, bool):
+                return 'true' if var_ else 'false'
+            elif isinstance(var_, (int, float)):
                 if formatstring is None:
-                    return str(var_).lower()
+                    return str(var_)
 
                 return formatstring.format(var_)
 
         def generate_array(array, indent='    ', formatstring=None):
             """Print (multi)dimensional arrays."""
+
             class OpenBrace:
                 """Helper class to identify open braces while printing."""
 
