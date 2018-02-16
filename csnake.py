@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
+import numpy as np
 from abc import ABCMeta, abstractmethod
+from typing import Iterable
 from datetime import date
 
 # public helper functions
@@ -9,13 +11,16 @@ def shape(array):
     """Return dimensions (shape) of a multidimensional list."""
     # strings should return nothing
 
+    if isinstance(array, np.ndarray):
+        return array.shape
+
     if isinstance(array, str):
         return ''
     curr = array
     shp = []
 
     while True:
-        if not isinstance(curr, (list, tuple)):
+        if not isinstance(curr, AnyArrayValue):
             return shp
         try:
             shp.append(len(curr))
@@ -24,7 +29,46 @@ def shape(array):
             return shp
 
 
+#types
+class AnyInt(metaclass=ABCMeta):
+    """Abstract class for any integer type: Python's int or numpy.integer."""
+
+
+AnyInt.register(int)
+AnyInt.register(np.integer)
+
+
+class AnyFloat(metaclass=ABCMeta):
+    """Abstract class for any floating type: Python's float or numpy.floating.
+    """
+
+
+AnyFloat.register(float)
+AnyFloat.register(np.floating)
+
+
+class AnyArrayValue(metaclass=ABCMeta):
+    """Abstract class for any array type: any iterable that's not a dict or
+    string."""
+
+    @classmethod
+    def __subclasshook__(cls, subclass):
+        if cls is AnyArrayValue:
+            if not issubclass(subclass,
+                              (dict, str)) and issubclass(subclass, Iterable):
+                return True
+            return False
+        return NotImplemented
+
+
+class AnyStructValue(metaclass=ABCMeta):
+    """Abstract class for any struct type: so far, AnyStructValue only."""
+
+
+AnyStructValue.register(dict)
+
 # classes defining C constructs
+
 
 class EnumValue:
     """Singular value of an C-style enumeration."""
@@ -63,7 +107,7 @@ class FuncPtr:
         """Generate the whole declaration."""
         jointargs = self.args
 
-        if isinstance(self.args, (list, tuple)):
+        if isinstance(self.args, (AnyArrayValue)):
             jointargs = ', '.join(jointargs)
 
         retval = '{rt} (*{name})({args})'.format(
@@ -94,7 +138,7 @@ class Variable:
         self.value_opts = value_opts
 
     def __array_dimensions(self):
-        if isinstance(self.array, (tuple, list)):
+        if isinstance(self.array, AnyArrayValue):
             array = "".join("[{0}]".format(dim) for dim in self.array)
         elif self.array is not None:
             array = "[{dim}]".format(dim=str(self.array))
@@ -110,7 +154,8 @@ class Variable:
     def declaration(self, extern=False):
         """Return a declaration string."""
 
-        if isinstance(self.qualifiers, (list, tuple)):
+        if not isinstance(self.qualifiers, str) and isinstance(
+                self.qualifiers, Iterable):
             qual = " ".join(self.qualifiers) + " "
         elif self.qualifiers is not None:
             qual = str(self.qualifiers) + " "
@@ -147,7 +192,7 @@ class Variable:
                 return var_.name
             elif isinstance(var_, bool):
                 return 'true' if var_ else 'false'
-            elif isinstance(var_, (int, float)):
+            elif isinstance(var_, (AnyInt, AnyFloat)):
                 if formatstring is None:
                     return str(var_)
 
@@ -178,14 +223,14 @@ class Variable:
                 top = stack.pop()
                 # non-printed tokens
 
-                if isinstance(top, (list, tuple)):
+                if isinstance(top, AnyArrayValue):
                     stack.append(ClosedBrace())
                     stack.extend(top[::-1])
                     stack.append(OpenBrace())
 
                     continue
 
-                if isinstance(top, dict):
+                if isinstance(top, AnyStructValue):
                     stack.append(ClosedBrace())
                     dict_pairs = [[value, Designator(key)]
                                   for key, value in top.items()][::-1]
@@ -224,13 +269,14 @@ class Variable:
                     output += '{'
                     depth += 1
 
-                    if isinstance(stack[-1], (OpenBrace, list, tuple, dict)):
+                    if isinstance(stack[-1],
+                                  (OpenBrace, AnyArrayValue, AnyStructValue)):
                         output += '\n' + (indent * depth)
                     leading_comma = False
 
                     continue
 
-                if isinstance(top, (int, float, str, bool, Modifier)):
+                if isinstance(top, (AnyInt, AnyFloat, str, bool, Modifier)):
                     output += generate_single_var(top, formatstring)
 
                     continue
@@ -246,7 +292,8 @@ class Variable:
 
         # main part: generating initializer
 
-        if isinstance(self.qualifiers, (list, tuple)):
+        if not isinstance(self.qualifiers, str) and isinstance(
+                self.qualifiers, Iterable):
             qual = " ".join(self.qualifiers) + " "
         elif self.qualifiers is not None:
             qual = str(self.qualifiers) + " "
@@ -255,7 +302,7 @@ class Variable:
 
         array = self.__array_dimensions()
 
-        if isinstance(self.value, (tuple, list, dict)):
+        if isinstance(self.value, (AnyArrayValue, AnyStructValue)):
             assignment = '\n' if len(shape(self.value)) > 1 else ''
             assignment += generate_array(self.value, indent, self.value_opts)
         else:
@@ -368,15 +415,15 @@ class Subscript(Modifier):
             raise TypeError(
                 "Modifiers can only be used with variables and modifiers.")
 
-        if not isinstance(subscript, (int, Modifier, list, tuple)):
+        if not isinstance(subscript, (AnyInt, Modifier, AnyArrayValue)):
             raise TypeError(
-                "Subscript must be an int, Modifier (or Variable), list or"
+                "Subscript must be an AnyInt, Modifier (or Variable), list or"
                 " tuple.")
 
         if not subscript:
             raise TypeError("Subscript must be non-empty.")
 
-        if isinstance(subscript, (int, Modifier)):
+        if isinstance(subscript, (AnyInt, Modifier)):
             self.subscript = [subscript]
         else:
             self.subscript = subscript
@@ -387,7 +434,7 @@ class Subscript(Modifier):
         ret_str = ''
 
         for dim in self.subscript:
-            if isinstance(dim, (int, str)):
+            if isinstance(dim, (AnyInt, str)):
                 ret_str += '[' + str(dim) + ']'
             elif isinstance(dim, Modifier):
                 ret_str += '[' + dim.name + ']'
@@ -519,8 +566,8 @@ class Function:
     def prototype(self):
         """Generate function prototype string."""
 
-        prot = '{qual} {ret} {nm}({args})'.format(
-            qual=' '.join(self.qualifiers),
+        prot = '{qual}{ret} {nm}({args})'.format(
+            qual=' '.join(self.qualifiers) + ' ' if self.qualifiers else '',
             ret=self.return_type,
             nm=self.name,
             args=', '.join([v.declaration() for v in self.variables]) if
@@ -546,7 +593,6 @@ class Function:
         """Call a function."""
 
         if not len(arg) == len(self.variables):
-            print(arg)
             raise ValueError(
                 "number of arguments must match number of variables")
 
@@ -570,7 +616,7 @@ class CodeWriter:
 
         self.line_feed = lf
 
-        if isinstance(indent, int):
+        if isinstance(indent, AnyInt):
             self.indent = ' ' * indent
         else:
             self.indent = indent
